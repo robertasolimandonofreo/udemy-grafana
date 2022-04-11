@@ -1,0 +1,134 @@
+version: "3"
+
+networks:
+  monitoring:
+    internal: true
+services:
+ grafana:
+    build: ./
+    container_name: grafana
+    environment:
+      - GF_INSTALL_PLUGINS=${GF_INSTALL_PLUGINS}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - monitoring
+      - default
+    restart: always
+
+ prometheus:
+    build: ./prometheus
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - monitoring
+      - default
+    restart: always
+
+ black-exporter:
+    build: ./blackbox
+    container_name: black-exporter
+    ports:
+      - 9115:9115
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - monitoring
+      - default
+    restart: always
+
+ mysql:
+    image: mysql:latest
+    container_name: mysql
+    restart: always
+    environment: 
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    command: --default-authentication-plugin=mysql_native_password
+    ports: 
+      - 3306:3306
+    networks:
+      - monitoring
+      - default
+    extra_hosts:
+      - host.docker.internal:host-gateway
+      
+ mysql-exporter:
+    image: prom/mysqld-exporter
+    container_name: mysql-exporter
+    volumes:
+      - ./.my.cnf:/root/.my.cnf
+    ports:
+      - 9104:9104
+    environment: 
+      - DATA_SOURCE_NAME=${DATA_SOURCE_NAME}
+      - collect.info_schema.tablestats=true
+      - collect.info_schema.userstats=true
+      - collect.info_schema.query_response_time=true
+      - collect.auto_increment.columns=true
+      - collect.binlog_size=true
+      - collect.perf_schema.eventsstatements=true
+      - collect.perf_schema.eventswaits=true
+      - collect.perf_schema.file_events=true
+      - collect.perf_schema.indexiowaits=true
+      - collect.perf_schema.tableiowaits=true
+      - collect.perf_schema.tablelocks=true
+    networks:
+      - monitoring
+      - default
+    restart: always
+    extra_hosts:
+      - host.docker.internal:host-gateway
+
+ cadvisor:
+    image: google/cadvisor:latest
+    container_name: cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    ports:
+      - 8080:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /cgroup:/sys/fs/cgroup:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - monitoring
+      - default
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: always
+
+ node-exporter:
+    build: ./node
+    container_name: nodeexporter
+    ports:
+      - 9100
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - monitoring
+      - default
+    restart: always
